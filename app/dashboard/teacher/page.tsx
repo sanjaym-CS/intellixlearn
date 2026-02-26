@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import {
   DEMO_COURSES, TEACHER_STUDENT_DATA, DEMO_NOTIFICATIONS,
   type StudentPerformance
@@ -31,23 +32,10 @@ function ProgressBar({ value, max = 100, color = "brand-gradient" }: { value: nu
   );
 }
 
-export default function TeacherDashboard() {
+function TeacherDashboardContent() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"overview" | "students" | "courses">("overview");
   const [feedbackStudent, setFeedbackStudent] = useState<StudentPerformance | null>(null);
-
-  if (!user || user.role !== "TEACHER") {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-muted-foreground">Teacher access required.</p>
-        <Link href="/signin">
-          <motion.button whileHover={{ scale: 1.02 }} className="brand-gradient text-white px-6 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-violet-500/20">
-            Sign In
-          </motion.button>
-        </Link>
-      </div>
-    );
-  }
 
   const myCourses = DEMO_COURSES.filter((c) => c.instructorId === user.id);
   const totalStudents = TEACHER_STUDENT_DATA.length;
@@ -344,5 +332,13 @@ export default function TeacherDashboard() {
         </motion.div>
       )}
     </div>
+  );
+}
+
+export default function TeacherDashboard() {
+  return (
+    <ProtectedRoute allowedRoles={["TEACHER"]}>
+      <TeacherDashboardContent />
+    </ProtectedRoute>
   );
 }

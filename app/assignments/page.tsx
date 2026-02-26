@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
-import { DEMO_ASSIGNMENTS } from "@/lib/demo-data";
+import { DEMO_ASSIGNMENTS, DEMO_COURSES, STUDENT_ENROLLED_IDS } from "@/lib/demo-data";
 import { ClipboardList, CheckCircle2, Clock, AlertCircle, Upload, XCircle } from "lucide-react";
 
 const STATUS_STYLES: Record<string, { color: string; label: string; icon: React.ElementType }> = {
@@ -19,6 +19,18 @@ export default function AssignmentsPage() {
   const [submitting, setSubmitting] = useState<number | null>(null);
   const [showUpload, setShowUpload] = useState<number | null>(null);
 
+  // Filter assignments based on user role
+  let visibleAssignments = assignments;
+  if (user?.role === "STUDENT") {
+    // Students see only assignments for their enrolled courses
+    const enrolledCourseIds = DEMO_COURSES.filter((c) => STUDENT_ENROLLED_IDS.includes(c.id)).map((c) => c.id);
+    visibleAssignments = assignments.filter((a) => enrolledCourseIds.includes(a.courseId));
+  } else if (user?.role === "TEACHER") {
+    // Teachers see assignments for their courses
+    const teacherCourseIds = DEMO_COURSES.filter((c) => c.instructorId === user.id).map((c) => c.id);
+    visibleAssignments = assignments.filter((a) => teacherCourseIds.includes(a.courseId));
+  }
+
   const handleSubmit = async (id: number) => {
     setSubmitting(id);
     await new Promise((r) => setTimeout(r, 1200));
@@ -28,9 +40,9 @@ export default function AssignmentsPage() {
     toast.success("Assignment submitted successfully!", { description: "Your instructor will review it soon." });
   };
 
-  const pending = assignments.filter((a) => a.status === "PENDING");
-  const submitted = assignments.filter((a) => a.status === "SUBMITTED");
-  const graded = assignments.filter((a) => a.status === "GRADED");
+  const pending = visibleAssignments.filter((a) => a.status === "PENDING");
+  const submitted = visibleAssignments.filter((a) => a.status === "SUBMITTED");
+  const graded = visibleAssignments.filter((a) => a.status === "GRADED");
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,7 +68,12 @@ export default function AssignmentsPage() {
       </motion.div>
 
       <div className="flex flex-col gap-3">
-        {assignments.map((assignment, i) => {
+        {visibleAssignments.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <p>No assignments found.</p>
+          </div>
+        ) : (
+          visibleAssignments.map((assignment, i) => {
           const s = STATUS_STYLES[assignment.status];
           const StatusIcon = s.icon;
           const isOverdue = new Date(assignment.dueDate) < new Date() && assignment.status === "PENDING";
@@ -108,7 +125,8 @@ export default function AssignmentsPage() {
               </div>
             </motion.div>
           );
-        })}
+          })
+        )}
       </div>
 
       {/* Upload dialog */}

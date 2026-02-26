@@ -1,5 +1,14 @@
 "use client";
-import { redirect } from "next/navigation";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
 export default function TeacherAnalyticsPage() {
-  redirect("/dashboard/teacher");
+  const router = useRouter();
+
+  useEffect(() => {
+    router.push("/dashboard/teacher");
+  }, [router]);
+
+  return null;
 }

@@ -10,6 +10,7 @@ import {
   Brain, Sparkles, Award, Medal, FlaskConical
 } from "lucide-react";
 import Link from "next/link";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import {
   DEMO_COURSES, DEMO_ACHIEVEMENTS, DEMO_DAILY_ACTIVITY,
   DEMO_NOTIFICATIONS, STUDENT_ENROLLED_IDS,
@@ -59,7 +60,7 @@ function AchievementBadge({ a, i }: { a: DemoAchievement; i: number }) {
   );
 }
 
-export default function StudentDashboard() {
+function StudentDashboardContent() {
   const { user } = useAuth();
   const [enrolledIds, setEnrolledIds] = useState<number[]>(STUDENT_ENROLLED_IDS);
   const [showEnroll, setShowEnroll] = useState(false);
@@ -371,5 +372,13 @@ export default function StudentDashboard() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function StudentDashboard() {
+  return (
+    <ProtectedRoute allowedRoles={["STUDENT"]}>
+      <StudentDashboardContent />
+    </ProtectedRoute>
   );
 }

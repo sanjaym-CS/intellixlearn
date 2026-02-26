@@ -4,7 +4,8 @@ import { useParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { DEMO_COURSES, DEMO_QUIZZES, type DemoQuiz, type DemoQuestion } from "@/lib/demo-data";
+import { useAuth } from "@/lib/auth-context";
+import { DEMO_COURSES, DEMO_QUIZZES, STUDENT_ENROLLED_IDS, type DemoQuiz, type DemoQuestion } from "@/lib/demo-data";
 import {
   ArrowLeft, Brain, Clock, Trophy, CheckCircle2, XCircle,
   ChevronRight, Zap, RotateCcw, Star, Lock
@@ -18,10 +19,15 @@ const DIFF_STYLES = {
 };
 
 export default function QuizzesPage() {
+  const { user } = useAuth();
   const params = useParams();
   const courseId = Number(params.courseId);
   const course = DEMO_COURSES.find((c) => c.id === courseId);
   const quizzes = DEMO_QUIZZES.filter((q) => q.courseId === courseId);
+  
+  // Check enrollment for students
+  const isEnrolled = user?.role === "STUDENT" ? STUDENT_ENROLLED_IDS.includes(courseId) : true;
+  const canAccess = user?.role !== "STUDENT" || isEnrolled;
 
   // Quiz state
   const [activeQuiz, setActiveQuiz] = useState<DemoQuiz | null>(null);
@@ -110,6 +116,16 @@ export default function QuizzesPage() {
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <p className="text-muted-foreground">Course not found.</p>
         <Link href="/courses"><motion.button whileHover={{ scale: 1.02 }} className="brand-gradient text-white px-5 py-2.5 rounded-xl text-sm font-semibold">Back</motion.button></Link>
+      </div>
+    );
+  }
+
+  if (!canAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <Lock className="w-12 h-12 text-muted-foreground" />
+        <p className="text-muted-foreground text-center">You must enroll in this course to access quizzes.</p>
+        <Link href={`/courses/${courseId}`}><motion.button whileHover={{ scale: 1.02 }} className="brand-gradient text-white px-5 py-2.5 rounded-xl text-sm font-semibold">Go to Course</motion.button></Link>
       </div>
     );
   }

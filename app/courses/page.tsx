@@ -17,7 +17,14 @@ export default function CoursesPage() {
   const [filter, setFilter] = useState("All");
   const [enrolledIds, setEnrolledIds] = useState<number[]>(STUDENT_ENROLLED_IDS);
 
-  const filtered = DEMO_COURSES.filter((c) => {
+  // Get courses based on user role
+  let coursesToShow = DEMO_COURSES;
+  if (user?.role === "TEACHER") {
+    // Teachers see only their courses
+    coursesToShow = DEMO_COURSES.filter((c) => c.instructorId === user.id);
+  }
+
+  const filtered = coursesToShow.filter((c) => {
     const matchSearch = c.title.toLowerCase().includes(search.toLowerCase()) ||
       c.description.toLowerCase().includes(search.toLowerCase()) ||
       c.instructor.toLowerCase().includes(search.toLowerCase());

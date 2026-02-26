@@ -4,8 +4,9 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
 import {
-  DEMO_COURSES, DEMO_LESSONS, type DemoLesson
+  DEMO_COURSES, DEMO_LESSONS, STUDENT_ENROLLED_IDS, type DemoLesson
 } from "@/lib/demo-data";
 import {
   ArrowLeft, CheckCircle2, Play, FileText, Zap, Clock,
@@ -26,11 +27,16 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
 };
 
 export default function LessonsPage() {
+  const { user } = useAuth();
   const params = useParams();
   const router = useRouter();
   const courseId = Number(params.courseId);
   const course = DEMO_COURSES.find((c) => c.id === courseId);
   const lessons = DEMO_LESSONS.filter((l) => l.courseId === courseId);
+  
+  // Check enrollment for students
+  const isEnrolled = user?.role === "STUDENT" ? STUDENT_ENROLLED_IDS.includes(courseId) : true;
+  const canAccess = user?.role !== "STUDENT" || isEnrolled;
   const [completed, setCompleted] = useState<number[]>(
     lessons.filter((l) => l.completed).map((l) => l.id)
   );
@@ -47,6 +53,16 @@ export default function LessonsPage() {
             Back to Courses
           </motion.button>
         </Link>
+      </div>
+    );
+  }
+
+  if (!canAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <Lock className="w-12 h-12 text-muted-foreground" />
+        <p className="text-muted-foreground text-center">You must enroll in this course to access lessons.</p>
+        <Link href={`/courses/${courseId}`}><motion.button whileHover={{ scale: 1.02 }} className="brand-gradient text-white px-5 py-2.5 rounded-xl text-sm font-semibold">Go to Course</motion.button></Link>
       </div>
     );
   }

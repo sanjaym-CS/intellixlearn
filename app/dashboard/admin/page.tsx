@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import {
   ADMIN_STATS, ADMIN_MONTHLY_DATA, DEMO_USERS, DEMO_COURSES
 } from "@/lib/demo-data";
@@ -23,23 +24,10 @@ const ROLE_STYLES = {
   ADMIN:   { color: "from-fuchsia-500 to-violet-500", label: "Admin", icon: Shield },
 };
 
-export default function AdminDashboard() {
+function AdminDashboardContent() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"overview" | "users" | "courses" | "system">("overview");
   const [userSearch, setUserSearch] = useState("");
-
-  if (!user || user.role !== "ADMIN") {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-muted-foreground">Admin access required.</p>
-        <Link href="/signin">
-          <motion.button whileHover={{ scale: 1.02 }} className="brand-gradient text-white px-6 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-violet-500/20">
-            Sign In
-          </motion.button>
-        </Link>
-      </div>
-    );
-  }
 
   const filteredUsers = DEMO_USERS.filter((u) =>
     u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -345,5 +333,13 @@ export default function AdminDashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminDashboard() {
+  return (
+    <ProtectedRoute allowedRoles={["ADMIN"]}>
+      <AdminDashboardContent />
+    </ProtectedRoute>
   );
 }
