@@ -1,214 +1,375 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { BookOpen, Plus } from "lucide-react";
-import { StatsCard } from "@/components/dashboard/StatsCard";
-import { SearchBar } from "@/components/dashboard/SearchBar";
-import { EnrolledCourseCard } from "@/components/dashboard/EnrolledCourseCard";
-import { EnrollCoursesDialog } from "@/components/dashboard/EnrollCoursesDialog";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import {
+  BookOpen, Flame, Star, Trophy, Zap, Target, TrendingUp,
+  ArrowRight, Lock, CheckCircle2, Clock, Play, Plus,
+  Brain, Sparkles, Award, Medal, FlaskConical
+} from "lucide-react";
+import Link from "next/link";
+import {
+  DEMO_COURSES, DEMO_ACHIEVEMENTS, DEMO_DAILY_ACTIVITY,
+  DEMO_NOTIFICATIONS, STUDENT_ENROLLED_IDS,
+  getXpForNextLevel, getXpForCurrentLevel, type DemoAchievement
+} from "@/lib/demo-data";
 
-interface Course {
-  id: number;
-  title: string;
-  description: string;
-  image?: string;
-  instructor?: {
-    name?: string;
-    email: string;
-  };
-  level?: string;
-  duration?: number;
-  lessonCount?: number;
-  rating?: number;
-  progress?: number;
-  status?: string;
-}
+const ACHIEVEMENT_ICONS: Record<string, React.ElementType> = {
+  Star, Trophy, Flame, Award, Zap, FlaskConical, Medal
+};
 
-interface Stats {
-  totalEnrollments: number;
-  completedCourses: number;
-  inProgressCourses: number;
-  averageProgress: number;
+const FADE_UP = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.4 }
+};
+
+const stagger = (i: number) => ({ ...FADE_UP, transition: { ...FADE_UP.transition, delay: i * 0.07 } });
+
+function AchievementBadge({ a, i }: { a: DemoAchievement; i: number }) {
+  const Icon = ACHIEVEMENT_ICONS[a.icon] || Star;
+  return (
+    <motion.div
+      key={a.id}
+      {...stagger(i)}
+      whileHover={a.earned ? { scale: 1.05, y: -3 } : {}}
+      className={`flex flex-col items-center gap-2 p-3 rounded-2xl border text-center transition-all ${
+        a.earned
+          ? "border-violet-200 bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-900/20 dark:to-blue-900/20"
+          : "border-border bg-muted/30 opacity-50"
+      }`}
+    >
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md ${
+        a.earned ? "brand-gradient" : "bg-muted"
+      }`}>
+        {a.earned ? (
+          <Icon className="w-6 h-6 text-white" />
+        ) : (
+          <Lock className="w-5 h-5 text-muted-foreground" />
+        )}
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-foreground leading-tight">{a.title}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">{a.description}</p>
+        {a.earned && <p className="text-[10px] font-bold text-primary mt-1">+{a.xpBonus} XP</p>}
+      </div>
+    </motion.div>
+  );
 }
 
 export default function StudentDashboard() {
-  // Using a mock student ID - in a real app, this would come from auth
-  const STUDENT_ID = 1;
+  const { user } = useAuth();
+  const [enrolledIds, setEnrolledIds] = useState<number[]>(STUDENT_ENROLLED_IDS);
+  const [showEnroll, setShowEnroll] = useState(false);
 
-  const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
-  const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
-  const [stats, setStats] = useState<Stats>({
-    totalEnrollments: 0,
-    completedCourses: 0,
-    inProgressCourses: 0,
-    averageProgress: 0,
-  });
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
-  const [isLoadingStats, setIsLoadingStats] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-muted-foreground">Please sign in to view your dashboard.</p>
+        <Link href="/signin">
+          <motion.button whileHover={{ scale: 1.02 }} className="brand-gradient text-white px-6 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-violet-500/20">
+            Sign In
+          </motion.button>
+        </Link>
+      </div>
+    );
+  }
 
-  const handleSearch = (query: string) => {
-    if (!query.trim()) {
-      setFilteredCourses(enrolledCourses);
-    } else {
-      const results = enrolledCourses.filter(
-        (course) =>
-          course.title.toLowerCase().includes(query.toLowerCase()) ||
-          course.description.toLowerCase().includes(query.toLowerCase())
-      );
-      setFilteredCourses(results);
-    }
+  const enrolledCourses = DEMO_COURSES.filter((c) => enrolledIds.includes(c.id));
+  const availableCourses = DEMO_COURSES.filter((c) => !enrolledIds.includes(c.id));
+  const currentXp = user.xp;
+  const xpForCurrent = getXpForCurrentLevel(user.level);
+  const xpForNext = getXpForNextLevel(user.level);
+  const xpProgress = Math.round(((currentXp - xpForCurrent) / (xpForNext - xpForCurrent)) * 100);
+
+  const handleEnroll = (courseId: number, courseTitle: string) => {
+    setEnrolledIds((prev) => [...prev, courseId]);
+    toast.success(`Enrolled in "${courseTitle}"!`, { description: "Start learning and earn XP." });
+  };
+
+  const statusColors: Record<string, string> = {
+    COMPLETED: "from-emerald-400 to-green-500",
+    IN_PROGRESS: "from-violet-400 to-blue-500",
+    NOT_STARTED: "from-slate-300 to-slate-400",
+  };
+
+  const statusLabel: Record<string, string> = {
+    COMPLETED: "Completed",
+    IN_PROGRESS: "In Progress",
+    NOT_STARTED: "Not Started",
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
-      {/* Top Decoration */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-purple-200/20 to-blue-200/20 rounded-full blur-3xl -z-0" />
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-blue-200/20 to-purple-200/20 rounded-full blur-3xl -z-0" />
+    <div className="flex flex-col gap-6">
+      {/* Welcome header */}
+      <motion.div {...FADE_UP} className="relative overflow-hidden brand-gradient rounded-2xl p-6 text-white shadow-xl shadow-violet-500/20">
+        <div className="relative z-10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-white/70 text-sm font-medium">Welcome back,</p>
+              <h1 className="text-2xl sm:text-3xl font-extrabold mt-0.5">{user.name.split(" ")[0]} 👋</h1>
+              <p className="text-white/80 text-sm mt-1">{user.city} · Keep up the great work!</p>
+            </div>
+            <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-xl px-3 py-2">
+              <Flame className="w-5 h-5 text-orange-300" />
+              <div>
+                <p className="text-xl font-extrabold leading-none">{user.streak}</p>
+                <p className="text-[10px] text-white/70">day streak</p>
+              </div>
+            </div>
+          </div>
+          {/* XP progress bar */}
+          <div className="mt-5">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-white/70 font-medium">Level {user.level}</span>
+              <span className="text-xs text-white/70">{currentXp.toLocaleString()} / {xpForNext.toLocaleString()} XP</span>
+            </div>
+            <div className="h-2.5 bg-white/20 rounded-full overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${xpProgress}%` }}
+                transition={{ duration: 1.2, ease: "easeOut", delay: 0.3 }}
+                className="h-full bg-white rounded-full"
+              />
+            </div>
+            <p className="text-[10px] text-white/60 mt-1">{xpForNext - currentXp} XP to Level {user.level + 1}</p>
+          </div>
+        </div>
+        {/* Decorative circles */}
+        <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-white/5" />
+        <div className="absolute -right-6 -bottom-8 w-28 h-28 rounded-full bg-white/5" />
+      </motion.div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-12">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg">
-              <BookOpen className="w-6 h-6 text-white" />
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "Enrolled", value: enrolledCourses.length, icon: BookOpen, color: "from-violet-500 to-purple-600" },
+          { label: "Completed", value: enrolledCourses.filter(c => c.status === "COMPLETED").length, icon: CheckCircle2, color: "from-emerald-400 to-green-500" },
+          { label: "XP Earned", value: `${(user.xp / 1000).toFixed(1)}k`, icon: Zap, color: "from-amber-400 to-orange-500" },
+          { label: "Coins", value: user.coins, icon: Star, color: "from-blue-400 to-cyan-500" },
+        ].map((stat, i) => (
+          <motion.div key={stat.label} {...stagger(i)}
+            className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow">
+            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-md`}>
+              <stat.icon className="w-4.5 h-4.5 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Student Dashboard
-              </h1>
-              <p className="text-gray-600 mt-1">
-                Welcome back! Continue your learning journey
-              </p>
+              <p className="text-2xl font-extrabold text-foreground">{stat.value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
             </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* AI Recommendation banner */}
+      <motion.div {...FADE_UP} className="bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-900/20 dark:to-blue-900/20 border border-violet-200/60 dark:border-violet-700/30 rounded-2xl p-4 flex items-center gap-4">
+        <div className="w-10 h-10 brand-gradient rounded-xl flex items-center justify-center shadow-md shadow-violet-500/20 shrink-0">
+          <Brain className="w-5 h-5 text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <p className="text-xs font-semibold text-primary">AI Recommendation</p>
           </div>
+          <p className="text-sm text-foreground font-medium">Continue <span className="font-bold">Mathematics – Algebra Fundamentals</span></p>
+          <p className="text-xs text-muted-foreground mt-0.5">Based on your progress, 3 more lessons will complete this module.</p>
+        </div>
+        <Link href="/courses/1/lessons">
+          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+            className="brand-gradient text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-md shadow-violet-500/20 shrink-0 flex items-center gap-1.5">
+            Resume <ArrowRight className="w-3.5 h-3.5" />
+          </motion.button>
+        </Link>
+      </motion.div>
+
+      {/* Enrolled Courses */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-foreground">My Courses</h2>
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }}
+            onClick={() => setShowEnroll(true)}
+            className="brand-gradient text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-md shadow-violet-500/20 flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Enroll
+          </motion.button>
         </div>
 
-        {/* Stats Section */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Stats</h2>
-          {isLoadingStats ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-32 bg-white rounded-lg animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatsCard
-                title="Total Enrollments"
-                value={stats.totalEnrollments}
-                icon="enrollments"
-              />
-              <StatsCard
-                title="Completed Courses"
-                value={stats.completedCourses}
-                icon="completed"
-              />
-              <StatsCard
-                title="In Progress"
-                value={stats.inProgressCourses}
-                icon="inProgress"
-              />
-              <StatsCard
-                title="Average Progress"
-                value={`${stats.averageProgress}%`}
-                icon="average"
-              />
-            </div>
-          )}
-        </div>
+        {enrolledCourses.length === 0 ? (
+          <div className="text-center py-16 bg-card border border-border rounded-2xl">
+            <BookOpen className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+            <p className="font-semibold text-foreground mb-1">No courses yet</p>
+            <p className="text-sm text-muted-foreground mb-4">Enroll in a course to start learning</p>
+            <motion.button whileHover={{ scale: 1.02 }} onClick={() => setShowEnroll(true)}
+              className="brand-gradient text-white text-sm font-semibold px-6 py-2.5 rounded-xl shadow-md shadow-violet-500/20">
+              Browse Courses
+            </motion.button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {enrolledCourses.map((course, i) => (
+              <motion.div key={course.id} {...stagger(i)} whileHover={{ y: -3 }}
+                className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:shadow-violet-500/10 transition-all group">
+                <div className={`h-2 bg-gradient-to-r ${statusColors[course.status || "NOT_STARTED"]}`} />
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <h3 className="font-semibold text-sm text-foreground leading-snug line-clamp-2">{course.title}</h3>
+                    <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r ${statusColors[course.status || "NOT_STARTED"]} text-white`}>
+                      {statusLabel[course.status || "NOT_STARTED"]}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{course.description}</p>
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {error}
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+                    <span className="flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" />{course.lessons} lessons</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{course.duration}</span>
+                    <span className="flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-400" />{course.rating}</span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="mb-3">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">Progress</span>
+                      <span className="font-semibold text-foreground">{course.progress}%</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${course.progress}%` }}
+                        transition={{ duration: 1, ease: "easeOut", delay: 0.2 + i * 0.1 }}
+                        className={`h-full bg-gradient-to-r ${statusColors[course.status || "NOT_STARTED"]} rounded-full`}
+                      />
+                    </div>
+                  </div>
+
+                  <Link href={`/courses/${course.id}`}>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }}
+                      className="w-full brand-gradient text-white text-xs font-semibold py-2.5 rounded-xl shadow-md shadow-violet-500/20 flex items-center justify-center gap-1.5">
+                      <Play className="w-3.5 h-3.5" />
+                      {course.progress === 0 ? "Start Course" : course.progress === 100 ? "Review" : "Continue"}
+                    </motion.button>
+                  </Link>
+                </div>
+              </motion.div>
+            ))}
           </div>
         )}
+      </div>
 
-        {/* Search and Action Section */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <SearchBar onSearch={handleSearch} />
-            </div>
-            <button
-              onClick={() => setIsDialogOpen(true)}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-300 transition-all duration-200 active:scale-95 whitespace-nowrap"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Enroll Courses</span>
-            </button>
+      {/* Weekly Activity */}
+      <div>
+        <h2 className="text-lg font-bold text-foreground mb-4">Weekly Activity</h2>
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <div className="flex items-end gap-2 h-24">
+            {DEMO_DAILY_ACTIVITY.map((day, i) => {
+              const maxXp = Math.max(...DEMO_DAILY_ACTIVITY.map((d) => d.xp));
+              const h = Math.round((day.xp / maxXp) * 100);
+              return (
+                <div key={day.date} className="flex-1 flex flex-col items-center gap-1.5">
+                  <div className="relative w-full flex justify-center group">
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: `${h}%` }}
+                      transition={{ duration: 0.6, delay: i * 0.08, ease: "easeOut" }}
+                      className="w-full max-w-[28px] brand-gradient rounded-t-md min-h-[4px] shadow-sm cursor-default"
+                    />
+                    <div className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-card border border-border rounded-lg px-2 py-1 text-[10px] font-semibold text-foreground whitespace-nowrap shadow-lg z-10">
+                      {day.xp} XP
+                    </div>
+                  </div>
+                  <span className="text-[9px] text-muted-foreground">{day.date.split(" ")[1]}</span>
+                </div>
+              );
+            })}
           </div>
-        </div>
-
-        {/* Enrolled Courses Section */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-800">Your Courses</h2>
-            {filteredCourses.length > 0 && (
-              <span className="text-sm font-semibold text-purple-600 bg-purple-50 px-3 py-1 rounded-full">
-                {filteredCourses.length} course{filteredCourses.length !== 1 ? "s" : ""}
-              </span>
-            )}
+          <div className="flex justify-between text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
+            <span className="flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5 text-primary" />This week</span>
+            <span className="font-semibold text-foreground">
+              {DEMO_DAILY_ACTIVITY.reduce((s, d) => s + d.xp, 0)} XP earned
+            </span>
           </div>
-
-          {isLoadingCourses ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-80 bg-white rounded-lg animate-pulse shadow-md"
-                />
-              ))}
-            </div>
-          ) : filteredCourses.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-purple-200 to-blue-200 rounded-full flex items-center justify-center">
-                <BookOpen className="w-10 h-10 text-purple-600" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">
-                No Courses Yet
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Start your learning journey by enrolling in a course
-              </p>
-              <button
-                onClick={() => setIsDialogOpen(true)}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-300 transition-all duration-200"
-              >
-                <Plus className="w-5 h-5" />
-                Explore Courses
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCourses.map((course) => (
-                <EnrolledCourseCard
-                  key={course.id}
-                  id={course.id}
-                  title={course.title}
-                  image={course.image}
-                  instructorName={course.instructor?.name || "Unknown Instructor"}
-                  progress={course.progress || 0}
-                  lessonCount={course.lessonCount}
-                  rating={course.rating}
-                />
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Enroll Courses Dialog */}
-      <EnrollCoursesDialog
-        isOpen={isDialogOpen}
-        onClose={() => setIsDialogOpen(false)}
-        studentId={STUDENT_ID}
-        enrolledCourseIds={enrolledCourses.map((c) => c.id)}
-        // onEnrollSuccess={handleEnrollSuccess}
-      />
+      {/* Achievements */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-foreground">Achievements</h2>
+          <Link href="/achievements" className="text-xs text-primary hover:underline flex items-center gap-1">
+            View all <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {DEMO_ACHIEVEMENTS.slice(0, 8).map((a, i) => (
+            <AchievementBadge key={a.id} a={a} i={i} />
+          ))}
+        </div>
+      </div>
+
+      {/* Enroll dialog */}
+      <AnimatePresence>
+        {showEnroll && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+            onClick={(e) => e.target === e.currentTarget && setShowEnroll(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 40, scale: 0.95 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden"
+            >
+              <div className="brand-gradient p-5 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold">Browse Courses</h3>
+                    <p className="text-white/70 text-sm">Enroll and start earning XP</p>
+                  </div>
+                  <button onClick={() => setShowEnroll(false)} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors">
+                    <span className="text-white text-lg leading-none">×</span>
+                  </button>
+                </div>
+              </div>
+              <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-3">
+                {availableCourses.length === 0 ? (
+                  <div className="text-center py-12">
+                    <CheckCircle2 className="w-12 h-12 text-primary/40 mx-auto mb-3" />
+                    <p className="font-semibold text-foreground">You&apos;re enrolled in all courses!</p>
+                  </div>
+                ) : (
+                  availableCourses.map((course) => (
+                    <div key={course.id} className="flex items-center gap-4 p-4 bg-muted/30 border border-border rounded-2xl hover:bg-muted/50 transition-colors">
+                      <div className="brand-gradient w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-violet-500/20">
+                        <BookOpen className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-foreground truncate">{course.title}</p>
+                        <p className="text-xs text-muted-foreground">{course.instructor} · {course.lessons} lessons · {course.duration}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <Star className="w-3 h-3 text-amber-400" />
+                          <span className="text-xs font-medium text-foreground">{course.rating}</span>
+                          <span className="text-xs text-muted-foreground">({course.enrolled} students)</span>
+                        </div>
+                      </div>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                        onClick={() => handleEnroll(course.id, course.title)}
+                        className="brand-gradient text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-md shadow-violet-500/20 shrink-0"
+                      >
+                        Enroll
+                      </motion.button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
