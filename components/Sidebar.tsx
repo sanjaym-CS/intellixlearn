@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -26,26 +26,39 @@ const STUDENT_NAV: NavItem[] = [
 const TEACHER_NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard/teacher", icon: LayoutDashboard },
   { label: "My Courses", href: "/courses", icon: BookOpen },
-  { label: "Students", href: "/teacher/students", icon: Users },
-  { label: "Analytics", href: "/teacher/analytics", icon: BarChart3 },
+  { label: "Students", href: "/dashboard/teacher?tab=students", icon: Users },
+  { label: "Analytics", href: "/dashboard/teacher?tab=overview", icon: BarChart3 },
 ];
 
 const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
-  { label: "Users", href: "/admin/users", icon: Users },
-  { label: "Courses", href: "/courses", icon: BookOpen },
-  { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+  { label: "Users", href: "/dashboard/admin?tab=users", icon: Users },
+  { label: "Courses", href: "/dashboard/admin?tab=courses", icon: BookOpen },
+  { label: "Analytics", href: "/dashboard/admin?tab=overview", icon: BarChart3 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentTab = searchParams.get("tab");
   const { user } = useAuth();
 
   const navItems =
     user?.role === "TEACHER" ? TEACHER_NAV :
     user?.role === "ADMIN" ? ADMIN_NAV :
     STUDENT_NAV;
+
+  const isActive = (href: string) => {
+    const [hrefPath, hrefQuery] = href.split("?");
+    const hrefTab = hrefQuery ? new URLSearchParams(hrefQuery).get("tab") : null;
+    if (!hrefTab) {
+      // Plain path link — active if pathname matches and no tab is active from a query
+      return pathname === hrefPath && !currentTab;
+    }
+    // Tab link — active if path matches AND tab matches
+    return pathname === hrefPath && currentTab === hrefTab;
+  };
 
   return (
     <aside className="w-56 shrink-0 hidden lg:flex flex-col gap-3 sticky top-[4.5rem] h-[calc(100vh-4.5rem)] pb-6 pt-2 overflow-y-auto">
@@ -83,7 +96,7 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="flex flex-col gap-1">
         {navItems.map(({ label, href, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
+          const active = isActive(href);
           return (
             <Link key={href} href={href}>
               <motion.div

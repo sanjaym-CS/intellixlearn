@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { useSearchParams } from "next/navigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import {
   DEMO_COURSES, TEACHER_STUDENT_DATA, DEMO_NOTIFICATIONS,
@@ -34,8 +35,17 @@ function ProgressBar({ value, max = 100, color = "brand-gradient" }: { value: nu
 
 function TeacherDashboardContent() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"overview" | "students" | "courses">("overview");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as "overview" | "students" | "courses" | null;
+  const [activeTab, setActiveTab] = useState<"overview" | "students" | "courses">(tabParam ?? "overview");
   const [feedbackStudent, setFeedbackStudent] = useState<StudentPerformance | null>(null);
+
+  // Sync tab when URL changes (e.g. from sidebar click)
+  useEffect(() => {
+    if (tabParam && ["overview", "students", "courses"].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   const myCourses = DEMO_COURSES.filter((c) => c.instructorId === user.id);
   const totalStudents = TEACHER_STUDENT_DATA.length;

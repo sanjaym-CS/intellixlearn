@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { useSearchParams } from "next/navigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import {
   ADMIN_STATS, ADMIN_MONTHLY_DATA, DEMO_USERS, DEMO_COURSES
@@ -26,8 +27,17 @@ const ROLE_STYLES = {
 
 function AdminDashboardContent() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "courses" | "system">("overview");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as "overview" | "users" | "courses" | "system" | null;
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "courses" | "system">(tabParam ?? "overview");
   const [userSearch, setUserSearch] = useState("");
+
+  // Sync tab when URL changes (e.g. from sidebar click)
+  useEffect(() => {
+    if (tabParam && ["overview", "users", "courses", "system"].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   const filteredUsers = DEMO_USERS.filter((u) =>
     u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
